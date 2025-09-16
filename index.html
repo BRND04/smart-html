@@ -1,235 +1,72 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart HTML Packager</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
-        }
-        /* Simple transition for button and textarea */
-        .transition-all {
-            transition: all 0.2s ease-in-out;
-        }
-        /* Custom scrollbar for a more modern look */
-        textarea::-webkit-scrollbar {
-            width: 8px;
-        }
-        textarea::-webkit-scrollbar-track {
-            background: #1f2937; /* dark-gray */
-        }
-        textarea::-webkit-scrollbar-thumb {
-            background: #4b5563; /* medium-gray */
-            border-radius: 4px;
-        }
-        textarea::-webkit-scrollbar-thumb:hover {
-            background: #6b7280; /* lighter-gray */
-        }
-    </style>
+  <meta charset="utf-8">
+  <title>HTML → Smart‑named Downloader</title>
+  <style>
+    body{font-family:system-ui, sans-serif;max-width:700px;margin:2rem auto;padding:0 1rem;}
+    textarea{width:100%;height:300px;font-family:monospace;font-size:0.9rem;padding:0.5rem;}
+    .buttons{margin-top:0.75rem;display:flex;gap:0.5rem;}
+    button{padding:0.6rem 1.2rem;font-size:1rem;border:0;border-radius:6px;cursor:pointer;box-shadow:0 2px 4px rgba(0,0,0,0.15);transition:box-shadow 0.15s ease;}
+    button:hover{box-shadow:0 3px 8px rgba(0,0,0,0.25);}
+  </style>
 </head>
-<body class="bg-gray-900 text-gray-200 flex items-center justify-center min-h-screen p-4">
+<body>
+  <h1>Paste your HTML – get an intelligently named file</h1>
 
-    <div class="w-full max-w-4xl mx-auto">
-        <header class="text-center mb-8">
-            <h1 class="text-4xl md:text-5xl font-bold text-white tracking-tight">Smart HTML Packager</h1>
-            <p class="mt-3 text-lg text-gray-400">HTML packager with smart file naming</p>
-        </header>
+  <textarea id="htmlInput" placeholder="Paste (or type) any HTML here…"></textarea>
+  <div class="buttons">
+    <button id="downloadBtn">Download</button>
+    <button id="clearBtn">Clear</button>
+  </div>
 
-        <main>
-            <div id="app-container" class="bg-gray-800 border border-gray-700 rounded-xl shadow-2xl shadow-indigo-500/10">
-                <div class="p-6">
-                    <label for="html-input" class="sr-only">HTML Code Input</label>
-                    <textarea id="html-input"
-                              class="w-full h-96 p-4 bg-gray-900 border border-gray-600 rounded-lg text-gray-300 font-mono text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
-                              placeholder="<!-- Paste your HTML code here... -->"
-                    ></textarea>
-                </div>
-                <div class="px-6 py-4 bg-gray-800/50 border-t border-gray-700 rounded-b-xl flex flex-col sm:flex-row items-center justify-between gap-4">
-                     <p id="status-text" class="text-sm text-gray-500">Awaiting code...</p>
-                     <div class="flex items-center gap-2 w-full sm:w-auto">
-                         <button id="paste-btn" class="w-full sm:w-auto bg-gray-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-gray-500 transition-all">
-                             Paste
-                         </button>
-                         <button id="clear-btn" class="w-full sm:w-auto bg-red-700 text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-red-600 transition-all">
-                             Clear
-                         </button>
-                         <button id="download-btn" class="w-full sm:w-auto bg-indigo-600 text-white font-semibold py-2 px-5 rounded-lg hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
-                             Package & Download
-                         </button>
-                     </div>
-                </div>
-            </div>
-        </main>
+  <script>
+    const input = document.getElementById('htmlInput');
 
-        <footer class="text-center mt-8">
-            <p class="text-sm text-gray-600">&copy; 2024 - Built for a direct, no-nonsense workflow.</p>
-        </footer>
-    </div>
+    // Convert a string into a safe, concise slug
+    function slugify(str){
+      return str.toLowerCase()
+                .replace(/[^a-z0-9]+/g,'-')       // non‑alphanumerics → dashes
+                .replace(/^-+|-+$/g,'')           // trim leading/trailing dashes
+                .slice(0,50) || 'untitled';       // keep it short & never empty
+    }
 
-    <script>
-        const downloadBtn = document.getElementById('download-btn');
-        const htmlInput = document.getElementById('html-input');
-        const statusText = document.getElementById('status-text');
-        const pasteBtn = document.getElementById('paste-btn');
-        const clearBtn = document.getElementById('clear-btn');
+    // Heuristic filename guesser – title > first h1 > default
+    function guessFileName(htmlStr){
+      try{
+        const doc = new DOMParser().parseFromString(htmlStr,'text/html');
+        const titleNode = doc.querySelector('title');
+        const h1Node    = doc.querySelector('h1');
+        const candidate = (titleNode && titleNode.textContent.trim()) ||
+                          (h1Node && h1Node.textContent.trim());
+        if(candidate) return slugify(candidate)+'.html';
+      }catch(e){ /* ignore parse errors */ }
+      return 'index.html';
+    }
 
-        /**
-         * Sanitizes a string to be a valid filename (kebab-case).
-         * @param {string} name - The string to sanitize.
-         * @returns {string} The sanitized string.
-         */
-        function sanitizeFilename(name) {
-            if (!name) return '';
-            return name
-                .trim()
-                .toLowerCase()
-                .replace(/<[^>]+>/g, '') // strip any inner html tags
-                .replace(/&[a-z]+;/g, '') // remove html entities like &nbsp;
-                .replace(/[^\w\s-]/g, '') // remove non-word, non-space, non-hyphen chars
-                .replace(/\s+/g, '-') // replace spaces with hyphens
-                .replace(/-+/g, '-') // collapse multiple hyphens
-                .substring(0, 50); // limit length
-        }
+    // Download handler
+    document.getElementById('downloadBtn').addEventListener('click', () => {
+      const html = input.value.trim();
+      if (!html) { alert('Nothing to save!'); return; }
 
-        /**
-         * Intelligently determines a filename from HTML code using a series of local checks.
-         * @param {string} code - The HTML code to analyze.
-         * @returns {string} The generated filename.
-         */
-        function getLocalIntelligentName(code) {
-            // Priority 1: Check for a special comment hint like <!-- name: my-component -->
-            const commentMatch = code.match(/<!--\s*name:\s*(.*?)\s*-->/i);
-            if (commentMatch && commentMatch[1].trim()) {
-                const saneName = sanitizeFilename(commentMatch[1]);
-                if(saneName) return saneName;
-            }
+      const fileName = guessFileName(html);
+      const blob = new Blob([html], {type: 'text/html'});
+      const url  = URL.createObjectURL(blob);
 
-            // Priority 2: Look for the content of the <title> tag
-            const titleMatch = code.match(/<title>(.*?)<\/title>/i);
-            if (titleMatch && titleMatch[1].trim()) {
-                const saneName = sanitizeFilename(titleMatch[1]);
-                 if(saneName) return saneName;
-            }
+      const a = Object.assign(document.createElement('a'), {
+        href: url,
+        download: fileName
+      });
+      a.click();
 
-            // Priority 3: Look for heading tags, starting with <h1>
-            const h1Match = code.match(/<h1[^>]*>(.*?)<\/h1>/i);
-            if (h1Match && h1Match[1].trim()) {
-                const saneName = sanitizeFilename(h1Match[1]);
-                 if(saneName) return saneName;
-            }
-             const h2Match = code.match(/<h2[^>]*>(.*?)<\/h2>/i);
-            if (h2Match && h2Match[1].trim()) {
-                const saneName = sanitizeFilename(h2Match[1]);
-                 if(saneName) return saneName;
-            }
+      URL.revokeObjectURL(url);           // tidy up
+    });
 
-            // Priority 4: Look for a descriptive ID on a main container element
-            const idMatch = code.match(/<(?:main|section|article|div)\s+[^>]*?id="([^"]+)"/i);
-            if (idMatch && idMatch[1].trim()) {
-                 const idName = idMatch[1].replace(/[-_]/g, ' '); // Convert kebab/snake case to spaces
-                 if (idName.length > 4) { // Avoid generic ids like 'app'
-                    const saneName = sanitizeFilename(idName);
-                    if(saneName) return saneName;
-                 }
-            }
-
-            // Final Fallback: If no other clues are found, use a timestamp
-            return `packaged-code-${Date.now()}`;
-        }
-
-
-        /**
-         * Downloads the content as a file.
-         * @param {string} filename - The name of the file.
-         * @param {string} content - The content of the file.
-         */
-        function downloadFile(filename, content) {
-            const element = document.createElement('a');
-            const blob = new Blob([content], { type: 'text/html' });
-            element.href = URL.createObjectURL(blob);
-            element.download = `${filename}.html`;
-            document.body.appendChild(element); // Required for this to work in Firefox
-            element.click();
-            document.body.removeChild(element);
-            URL.revokeObjectURL(element.href); // Clean up the object URL
-        }
-        
-        // --- Event Listeners ---
-
-        pasteBtn.addEventListener('click', async () => {
-            try {
-                // Ask for permission and read from clipboard
-                const text = await navigator.clipboard.readText();
-                if (text) {
-                    htmlInput.value = text;
-                    statusText.textContent = "Code pasted from clipboard.";
-                    statusText.classList.remove('text-yellow-400', 'text-red-500');
-                } else {
-                    statusText.textContent = "Clipboard is empty.";
-                    statusText.classList.add('text-yellow-400');
-                }
-            } catch (err) {
-                console.error('Failed to read clipboard contents: ', err);
-                statusText.textContent = "Could not paste. Check browser permissions.";
-                statusText.classList.add('text-red-500');
-            }
-        });
-
-        clearBtn.addEventListener('click', () => {
-            htmlInput.value = '';
-            statusText.textContent = "Awaiting code...";
-            statusText.classList.remove('text-yellow-400', 'text-red-500');
-            htmlInput.focus(); // Set focus back to the textarea
-        });
-
-        downloadBtn.addEventListener('click', () => {
-            const code = htmlInput.value;
-            if (!code.trim()) {
-                statusText.textContent = "Please paste some code first.";
-                statusText.classList.add('text-yellow-400');
-                setTimeout(() => {
-                    statusText.textContent = "Awaiting code...";
-                    statusText.classList.remove('text-yellow-400');
-                }, 2000);
-                return;
-            }
-
-            // Provide immediate feedback
-            downloadBtn.disabled = true;
-            downloadBtn.textContent = 'Packaging...';
-            statusText.textContent = "Analyzing code...";
-
-            // Use a short timeout to allow the UI to update before the download starts.
-            // Even though the local analysis is instant, this makes the experience feel smoother.
-            setTimeout(() => {
-                try {
-                    const filename = getLocalIntelligentName(code);
-                    statusText.textContent = `Generated filename: ${filename}.html`;
-
-                    downloadFile(filename, code);
-
-                    // Success feedback
-                    downloadBtn.textContent = 'Downloaded!';
-                    setTimeout(() => {
-                        downloadBtn.textContent = 'Package & Download';
-                        statusText.textContent = "Ready for the next one.";
-                        downloadBtn.disabled = false;
-                    }, 2500);
-
-                } catch (error) {
-                    console.error("Download failed:", error);
-                    statusText.textContent = "Error packaging file. See console.";
-                    statusText.classList.add('text-red-500');
-                    downloadBtn.disabled = false;
-                }
-            }, 100); // 100ms delay for UX
-        });
-
-    </script>
+    // Clear handler
+    document.getElementById('clearBtn').addEventListener('click', () => {
+      input.value = '';
+      input.focus();
+    });
+  </script>
 </body>
 </html>
